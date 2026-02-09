@@ -51,6 +51,64 @@ This Task & Ticket Management System provides a secure, role-based platform for 
 
 ---
 
+## Architecture & Design Pattern
+
+### Layered Architecture
+
+The application follows a **3-tier layered architecture** for separation of concerns:
+
+```
+┌─────────────────────────────────────┐
+│     Controller Layer (REST API)     │  ← Handles HTTP requests/responses
+├─────────────────────────────────────┤
+│      Service Layer (Business)       │  ← Business logic & validation
+├─────────────────────────────────────┤
+│   Repository Layer (Data Access)    │  ← Database operations
+└─────────────────────────────────────┘
+            ↓
+      PostgreSQL Database
+```
+
+### Strategy Design Pattern
+
+The application implements the **Strategy Pattern** for task assignment to allow flexible assignment algorithms.
+
+**Implementation:**
+
+```java
+// Strategy Interface
+public interface TaskAssignmentStrategy {
+    void assign(Task task, Long userId);
+}
+
+// Concrete Strategy
+@Component
+public class ManualAssignmentStrategy implements TaskAssignmentStrategy {
+    @Override
+    public void assign(Task task, Long userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException(...));
+        task.setAssignedTo(user);
+    }
+}
+```
+
+**Benefits:**
+- ✅ **Open/Closed Principle** - Easy to add new assignment strategies (e.g., auto-assign, round-robin) without modifying existing code
+- ✅ **Single Responsibility** - Each strategy focuses on one assignment algorithm
+- ✅ **Extensibility** - Future assignment strategies can be plugged in without changing the service layer
+
+**Current Implementation:**
+- `TaskAssignmentStrategy` - Interface defining the assignment contract
+- `ManualAssignmentStrategy` - Concrete implementation for manual user assignment by MANAGER
+
+**Future Extensions:**
+- `AutoAssignmentStrategy` - Auto-assign to least busy user
+- `RoundRobinStrategy` - Distribute tasks evenly across users
+- `PriorityBasedStrategy` - Assign based on user skill level and task priority
+
+---
+
 ## System Roles
 
 ### ADMIN
@@ -118,21 +176,40 @@ This Task & Ticket Management System provides a secure, role-based platform for 
    http://localhost:8080/swagger-ui/index.html
    ```
 
-### Initial Setup
+### Automatic Admin User Creation
 
-Create the first ADMIN user directly in the database:
+The application uses **DataInitializer** to automatically create a default admin user on first startup if no admin exists.
 
-```sql
--- Generate bcrypt hash for password "admin123" (use online bcrypt generator or this value)
-INSERT INTO users (name, email, password, role, is_active, created_at)
-VALUES (
-    'System Admin',
-    'admin@system.com',
-    '$2a$10$YourBcryptHashHere',  -- Replace with bcrypt hash of your chosen password
-    'ADMIN',
-    true,
-    NOW()
-);
+**Default Credentials:**
+- **Email**: `admin@system.com`
+- **Password**: `admin123`
+
+The credentials are configured in `application.properties`:
+```properties
+admin.default.name=System Admin
+admin.default.email=admin@system.com
+admin.default.password=admin123
+```
+
+**On First Startup**, you'll see this in the logs:
+```
+==========================================
+⚠️  DEFAULT ADMIN ACCOUNT CREATED
+==========================================
+Email: admin@system.com
+Password: admin123
+⚠️  PLEASE CHANGE THIS PASSWORD IMMEDIATELY!
+==========================================
+```
+
+**Security Note:** Change the default admin password immediately after first login using the `/api/users/me/password` endpoint.
+
+**To Use Custom Admin Credentials:**
+Update the values in `application.properties` before first run:
+```properties
+admin.default.name=Your Name
+admin.default.email=your.email@company.com
+admin.default.password=YourSecurePassword
 ```
 
 ---
