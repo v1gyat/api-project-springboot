@@ -23,7 +23,7 @@ A comprehensive Spring Boot REST API for managing tasks, users, and comments wit
 
 ---
 
-## 🎯 Overview
+## Overview
 
 This Task & Ticket Management System provides a secure, role-based platform for managing tasks within an organization. The system enforces strict access controls based on user roles, ensuring proper separation of duties.
 
@@ -38,7 +38,7 @@ This Task & Ticket Management System provides a secure, role-based platform for 
 
 ---
 
-## 🛠️ Technologies Used
+## Technologies Used
 
 - **Spring Boot 3.x** - Application framework
 - **Spring Security** - Authentication and authorization
@@ -51,7 +51,7 @@ This Task & Ticket Management System provides a secure, role-based platform for 
 
 ---
 
-## 👥 System Roles
+## System Roles
 
 ### ADMIN
 **Oversight and User Management**
@@ -70,7 +70,7 @@ This Task & Ticket Management System provides a secure, role-based platform for 
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -137,7 +137,7 @@ VALUES (
 
 ---
 
-## 🔐 Authentication
+## Authentication
 
 ### How It Works
 
@@ -153,7 +153,7 @@ Tokens expire after a configured duration. Client must handle 401 Unauthorized r
 
 ---
 
-## 📡 API Endpoints
+## API Endpoints
 
 ### Base URL
 ```
@@ -909,7 +909,7 @@ Authorization: Bearer <jwt-token>
 
 ---
 
-## 📊 Data Models
+## Data Models
 
 ### Role Enum
 ```
@@ -962,7 +962,7 @@ LOW, MEDIUM, HIGH
 
 ---
 
-## 🔒 Role-Based Access Control
+## Role-Based Access Control
 
 ### Endpoint Access Matrix
 
@@ -997,7 +997,7 @@ LOW, MEDIUM, HIGH
 
 ---
 
-## ⚠️ Error Handling
+## Error Handling
 
 ### HTTP Status Codes
 
@@ -1196,7 +1196,7 @@ CREATE TABLE comments (
 
 ---
 
-## 📝 Notes
+## Notes
 
 ### Security Considerations
 
@@ -1218,16 +1218,6 @@ CREATE TABLE comments (
 - `createdBy` tracks who created each task
 - `updatedBy` tracks who last modified each task
 - All timestamps use `LocalDateTime` in ISO-8601 format
-
----
-
-##  Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
 
 ---
 
