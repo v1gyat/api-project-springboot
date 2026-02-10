@@ -17,6 +17,7 @@ import com.example.apiproject.service.strategy.TaskAssignmentStrategy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -39,6 +40,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
+    @Transactional
     public TaskResponseDTO createTask(TaskRequestDTO request) {
         // Step 1: Manual mapping from DTO to Entity
         Task task = new Task();
@@ -73,6 +75,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
+    @Transactional
     public TaskResponseDTO assignTask(Long taskId, Long userId) {
         // Step 1: Find task by ID, throw exception if not found
         Task task = taskRepository.findById(taskId)
@@ -122,6 +125,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
+    @Transactional
     public TaskResponseDTO updateTask(Long id, TaskUpdateDTO updateDTO) {
         // Step 1: Find the task by ID
         Task task = taskRepository.findById(id)

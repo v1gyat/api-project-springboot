@@ -6,7 +6,7 @@ package com.example.apiproject.dto;
  * Returned when MANAGER calls GET /api/users
  */
 public record UserSummaryDTO(
-        Long id,
-        String name,
-        String email) {
+                Long id,
+                String name,
+                String email) {
 }
