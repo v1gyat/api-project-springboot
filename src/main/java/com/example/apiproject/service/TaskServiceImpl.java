@@ -13,7 +13,8 @@ import com.example.apiproject.exception.ResourceNotFoundException;
 import com.example.apiproject.exception.UnauthorizedException;
 import com.example.apiproject.repository.TaskRepository;
 import com.example.apiproject.repository.UserRepository;
-import com.example.apiproject.service.strategy.TaskAssignmentStrategy;
+import com.example.apiproject.entity.AssignmentType;
+import com.example.apiproject.service.strategy.TaskAssignmentStrategyFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -26,17 +27,16 @@ public class TaskServiceImpl implements TaskService {
 
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
-    private final TaskAssignmentStrategy assignmentStrategy;
+    private final TaskAssignmentStrategyFactory strategyFactory;
 
     // Constructor Injection - Best Practice for Dependency Injection
-    // Depends on interface (TaskAssignmentStrategy) not concrete class - Loose
-    // Coupling!
+    // Depends on factory to get the right strategy dynamically
     public TaskServiceImpl(TaskRepository taskRepository,
             UserRepository userRepository,
-            TaskAssignmentStrategy assignmentStrategy) {
+            TaskAssignmentStrategyFactory strategyFactory) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
-        this.assignmentStrategy = assignmentStrategy;
+        this.strategyFactory = strategyFactory;
     }
 
     @Override
@@ -76,23 +76,24 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     @Transactional
-    public TaskResponseDTO assignTask(Long taskId, Long userId) {
+    public TaskResponseDTO assignTask(Long taskId, Long userId, AssignmentType assignmentType) {
         // Step 1: Find task by ID, throw exception if not found
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task", "id", taskId));
 
-        User assignedUser = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
-        if (assignedUser.getRole() != Role.USER) {
-            throw new BadRequestException("Tasks can only be assigned to a user");
-        }
-        // Step 2: Use strategy to assign task to user
-        assignmentStrategy.assign(task, userId);
+        // Step 2: Get the appropriate strategy from factory
+        // Factory pattern enables dynamic strategy selection without modifying this
+        // code
+        var strategy = strategyFactory.getStrategy(assignmentType);
 
-        // Step 3: Save the updated task
+        // Step 3: Use selected strategy to assign task
+        // Each strategy handles its own validation (e.g., userId requirement)
+        strategy.assign(task, userId);
+
+        // Step 4: Save the updated task
         Task updatedTask = taskRepository.save(task);
 
-        // Step 4: Convert to DTO and return
+        // Step 5: Convert to DTO and return
         return mapToDTO(updatedTask);
     }
 

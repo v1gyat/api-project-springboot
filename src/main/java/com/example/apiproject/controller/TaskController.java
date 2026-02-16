@@ -3,6 +3,7 @@ package com.example.apiproject.controller;
 import com.example.apiproject.dto.TaskRequestDTO;
 import com.example.apiproject.dto.TaskResponseDTO;
 import com.example.apiproject.dto.TaskUpdateDTO;
+import com.example.apiproject.entity.AssignmentType;
 import com.example.apiproject.response.ApiResponse;
 import com.example.apiproject.service.TaskService;
 import jakarta.validation.Valid;
@@ -61,14 +62,21 @@ public class TaskController {
     }
 
     /**
-     * Assign a task to a user
-     * PUT /api/tasks/{id}/assign?userId={userId}
+     * Assign a task to a user using dynamic strategy selection
+     * PUT /api/tasks/{id}/assign
      * Only MANAGER role can assign tasks
-     * ADMIN does not assign tasks
-     * Task can only be assigned to USER role (not MANAGER or ADMIN)
      * 
-     * @param id     The ID of the task to assign
-     * @param userId The ID of the user to assign the task to
+     * Strategy behavior:
+     * - MANUAL: requires userId parameter (validates user exists and has USER role)
+     * - RANDOM: userId parameter ignored (selects random active user)
+     * - LEAST_LOADED: userId parameter ignored (selects user with fewest active
+     * tasks)
+     * 
+     * @param id             The ID of the task to assign
+     * @param userId         The ID of the user (required for MANUAL, ignored for
+     *                       RANDOM/LEAST_LOADED)
+     * @param assignmentType The assignment strategy to use (MANUAL, RANDOM,
+     *                       LEAST_LOADED)
      * @return ResponseEntity with ApiResponse wrapper containing updated
      *         TaskResponseDTO
      */
@@ -76,17 +84,19 @@ public class TaskController {
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<ApiResponse<TaskResponseDTO>> assignTask(
             @PathVariable Long id,
-            @RequestParam Long userId) {
+            @RequestParam(required = false) Long userId,
+            @RequestParam AssignmentType assignmentType) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        log.info("User '{}' requested to assign task {} to user {}", auth.getName(), id, userId);
+        log.info("Manager '{}' requested to assign task {} using {} strategy",
+                auth.getName(), id, assignmentType);
 
-        // Call service to assign task
-        TaskResponseDTO taskResponse = taskService.assignTask(id, userId);
+        // Call service to assign task with selected strategy
+        TaskResponseDTO taskResponse = taskService.assignTask(id, userId, assignmentType);
 
         // Wrap response in ApiResponse structure
         ApiResponse<TaskResponseDTO> response = new ApiResponse<>(
                 true,
-                "Task assigned successfully",
+                "Task assigned successfully using " + assignmentType + " strategy",
                 taskResponse,
                 null,
                 LocalDateTime.now());

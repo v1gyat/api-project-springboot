@@ -3,6 +3,7 @@ package com.example.apiproject.service;
 import com.example.apiproject.dto.TaskRequestDTO;
 import com.example.apiproject.dto.TaskResponseDTO;
 import com.example.apiproject.dto.TaskUpdateDTO;
+import com.example.apiproject.entity.AssignmentType;
 
 import java.util.List;
 
@@ -18,16 +19,23 @@ public interface TaskService {
     TaskResponseDTO createTask(TaskRequestDTO request);
 
     /**
-     * Assigns a task to a user
+     * Assigns a task to a user using the specified assignment strategy
      * 
-     * @param taskId The ID of the task to assign
-     * @param userId The ID of the user to assign the task to
+     * @param taskId         The ID of the task to assign
+     * @param userId         The ID of the user to assign the task to (may be null
+     *                       for non-manual strategies)
+     * @param assignmentType The strategy to use for assignment (MANUAL, RANDOM,
+     *                       LEAST_LOADED)
      * @return The updated task as a response DTO
      * @throws com.example.apiproject.exception.ResourceNotFoundException if task or
      *                                                                    user not
      *                                                                    found
+     * @throws com.example.apiproject.exception.BadRequestException       if
+     *                                                                    strategy
+     *                                                                    requirements
+     *                                                                    not met
      */
-    TaskResponseDTO assignTask(Long taskId, Long userId);
+    TaskResponseDTO assignTask(Long taskId, Long userId, AssignmentType assignmentType);
 
     /**
      * Get a task by ID
