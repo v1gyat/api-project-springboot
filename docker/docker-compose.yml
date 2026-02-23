@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  task-app:
+    build:
+      context: ..
+    container_name: task_app_backend
+    ports:
+      - "8080:8080" # Allows you to access the app at localhost:8080
+    environment:
+      # Use the SERVICE 'postgres' instead of 'localhost'
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/devdb
+      - SPRING_DATASOURCE_USERNAME=devuser
+      - SPRING_DATASOURCE_PASSWORD=devpass
+    depends_on:
+      - postgres # Tells Docker to start the DB before starting the app
+    networks:
+      - dev-network
+    restart: always
   postgres:
     image: postgres:15-alpine
     container_name: postgres_db
@@ -36,6 +52,7 @@ services:
 volumes:
   postgres_data:
   pgadmin_data:
+
 
 networks:
   dev-network:
