@@ -35,6 +35,9 @@ This Task & Ticket Management System provides a secure, role-based platform for 
 - ✅ **Comment System** - Collaborative commenting on tasks
 - ✅ **User Management** - Admin controls for user administration
 - ✅ **Audit Tracking** - Track who created and updated tasks
+- ✅ **Dedicated Mapper Layer** - Clean separation of mapping logic from business logic
+- ✅ **Role-Based DTO Responses** - Each role gets a tailored response shape (Admin, Manager, User)
+- ✅ **Shared Security Utility** - Centralized `SecurityUtils` for authenticated user resolution
 
 ---
 
@@ -55,19 +58,32 @@ This Task & Ticket Management System provides a secure, role-based platform for 
 
 ### Layered Architecture
 
-The application follows a **3-tier layered architecture** for separation of concerns:
+The application follows a **layered architecture** with dedicated Mapper and Utility layers for clean separation of concerns:
 
 ```
 ┌─────────────────────────────────────┐
 │     Controller Layer (REST API)     │  ← Handles HTTP requests/responses
 ├─────────────────────────────────────┤
 │      Service Layer (Business)       │  ← Business logic & validation
-├─────────────────────────────────────┤
+├──────────────┬──────────────────────┤
+│ Mapper Layer │   Utility Layer      │  ← DTO conversion & shared helpers
+│ (UserMapper, │   (SecurityUtils)    │
+│  TaskMapper, │                      │
+│  CommentMap) │                      │
+├──────────────┴──────────────────────┤
 │   Repository Layer (Data Access)    │  ← Database operations
 └─────────────────────────────────────┘
             ↓
       PostgreSQL Database
 ```
+
+**Mapper Layer** (`com.example.apiproject.mapper`):
+- `UserMapper` — converts `User` entity to `UserProfileDTO`, `UserAdminDTO`, or `UserSummaryDTO`
+- `TaskMapper` — converts `Task` entity to `TaskResponseDTO` with null-safe user references
+- `CommentMapper` — converts `Comment` entity to `CommentResponseDTO`
+
+**Utility Layer** (`com.example.apiproject.util`):
+- `SecurityUtils` — single source of truth for `getCurrentUser()`, injected into all services
 
 ### Strategy Design Pattern
 
@@ -354,59 +370,65 @@ Authorization: Bearer <admin-jwt-token>
 Authorization: Bearer <jwt-token>
 ```
 
-**Response for ADMIN** (200 OK):
+**Response for ADMIN** (200 OK) — returns `UserAdminDTO`:
 ```json
 {
   "success": true,
   "message": "Users retrieved successfully",
-  "data": [
-    {
-      "id": 1,
-      "name": "Admin User",
-      "email": "admin@example.com",
-      "role": "ADMIN",
-      "isActive": true,
-      "createdAt": "2026-01-01T10:00:00"
-    },
-    {
-      "id": 2,
-      "name": "Manager User",
-      "email": "manager@example.com",
-      "role": "MANAGER",
-      "isActive": true,
-      "createdAt": "2026-01-05T14:30:00"
-    },
-    {
-      "id": 3,
-      "name": "John User",
-      "email": "john@example.com",
-      "role": "USER",
-      "isActive": true,
-      "createdAt": "2026-01-10T09:00:00"
-    }
-  ],
+  "data": {
+    "content": [
+      {
+        "id": 1,
+        "name": "Admin User",
+        "email": "admin@example.com",
+        "role": "ADMIN",
+        "isActive": true,
+        "createdAt": "2026-01-01T10:00:00"
+      },
+      {
+        "id": 2,
+        "name": "Manager User",
+        "email": "manager@example.com",
+        "role": "MANAGER",
+        "isActive": true,
+        "createdAt": "2026-01-05T14:30:00"
+      }
+    ],
+    "pageNumber": 0,
+    "pageSize": 10,
+    "totalElements": 2,
+    "totalPages": 1,
+    "last": true
+  },
   "error": null,
   "timestamp": "2026-02-09T12:00:00"
 }
 ```
 
-**Response for MANAGER** (200 OK - only active USERs):
+**Response for MANAGER** (200 OK) — returns `UserSummaryDTO` (only active USERs):
 ```json
 {
   "success": true,
   "message": "Users retrieved successfully",
-  "data": [
-    {
-      "id": 3,
-      "name": "John User",
-      "email": "john@example.com"
-    },
-    {
-      "id": 4,
-      "name": "Jane User",
-      "email": "jane@example.com"
-    }
-  ],
+  "data": {
+    "content": [
+      {
+        "id": 3,
+        "name": "John User",
+        "email": "john@example.com"
+      },
+      {
+        "id": 4,
+        "name": "Jane User",
+        "email": "jane@example.com"
+      }
+    ],
+    "pageNumber": 0,
+    "pageSize": 10,
+    "totalElements": 2,
+    "totalPages": 1,
+    "last": true
+  },
   "error": null,
   "timestamp": "2026-02-09T12:00:00"
 }
@@ -427,12 +449,13 @@ Authorization: Bearer <jwt-token>
 Authorization: Bearer <jwt-token>
 ```
 
-**Response** (200 OK):
+**Response** (200 OK) — returns `UserProfileDTO`:
 ```json
 {
   "id": 3,
   "name": "John User",
-  "email": "john@example.com"
+  "email": "john@example.com",
+  "role": "USER"
 }
 ```
 
@@ -893,7 +916,7 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
-**Response** (201 Created):
+**Response** (201 Created) — returns `CommentResponseDTO`:
 ```json
 {
   "success": true,
@@ -901,9 +924,9 @@ Authorization: Bearer <jwt-token>
   "data": {
     "id": 1,
     "message": "I've started working on this task.",
-    "createdAt": "2026-02-04T12:30:00",
-    "authorId": 3,
-    "authorName": "John User"
+    "commentedById": 3,
+    "commentedByName": "John User",
+    "createdAt": "2026-02-04T12:30:00"
   },
   "error": null,
   "timestamp": "2026-02-04T12:30:00"
@@ -928,27 +951,34 @@ Authorization: Bearer <jwt-token>
 **Path Parameters**:
 - `taskId`: Task ID (Long)
 
-**Response** (200 OK):
+**Response** (200 OK) — returns paginated `CommentResponseDTO`:
 ```json
 {
   "success": true,
   "message": "Comments retrieved successfully",
-  "data": [
-    {
-      "id": 1,
-      "message": "I've started working on this task.",
-      "createdAt": "2026-02-04T12:30:00",
-      "authorId": 3,
-      "authorName": "John User"
-    },
-    {
-      "id": 2,
-      "message": "Please prioritize this task.",
-      "createdAt": "2026-02-04T13:00:00",
-      "authorId": 2,
-      "authorName": "Manager User"
-    }
-  ],
+  "data": {
+    "content": [
+      {
+        "id": 1,
+        "message": "I've started working on this task.",
+        "commentedById": 3,
+        "commentedByName": "John User",
+        "createdAt": "2026-02-04T12:30:00"
+      },
+      {
+        "id": 2,
+        "message": "Please prioritize this task.",
+        "commentedById": 2,
+        "commentedByName": "Manager User",
+        "createdAt": "2026-02-04T13:00:00"
+      }
+    ],
+    "pageNumber": 0,
+    "pageSize": 10,
+    "totalElements": 2,
+    "totalPages": 1,
+    "last": true
+  },
   "error": null,
   "timestamp": "2026-02-04T13:00:00"
 }
@@ -1035,7 +1065,33 @@ LOW, MEDIUM, HIGH
 | message | String | Comment text |
 | createdAt | LocalDateTime | Creation timestamp |
 | task | Task | Associated task |
-| author | User | Comment author |
+| commentedBy | User | User who commented |
+
+---
+
+## Data Transfer Objects (DTOs)
+
+The API uses role-specific DTOs to return only the data each role needs. All mapping logic lives in dedicated `@Component` mapper classes.
+
+### User DTOs
+
+| DTO | Used By | Fields | Mapper Method |
+|-----|---------|--------|---------------|
+| `UserProfileDTO` | `/api/users/me` | id, name, email, role | `UserMapper.toProfileDTO()` |
+| `UserAdminDTO` | ADMIN list view, role/status updates | id, name, email, role, isActive, createdAt | `UserMapper.toAdminDTO()` |
+| `UserSummaryDTO` | MANAGER list view | id, name, email | `UserMapper.toSummaryDTO()` |
+
+### Task DTOs
+
+| DTO | Fields | Mapper Method |
+|-----|--------|---------------|
+| `TaskResponseDTO` | id, title, description, status, priority, createdAt, assignedUserId, assignedUserName, createdByUserId, createdByUserName, updatedByUserId, updatedByUserName | `TaskMapper.toResponseDTO()` |
+
+### Comment DTOs
+
+| DTO | Fields | Mapper Method |
+|-----|--------|---------------|
+| `CommentResponseDTO` | id, message, commentedById, commentedByName, createdAt | `CommentMapper.toResponseDTO()` |
 
 ---
 
@@ -1049,8 +1105,7 @@ LOW, MEDIUM, HIGH
 | POST /api/auth/login | ✅ | ✅ | ✅ |
 | POST /api/auth/register | ✅ | ❌ | ❌ |
 | **Users** |
-| GET /api/users | ✅ | ❌ | ❌ |
-| GET /api/users/public | ✅ | ✅ | ❌ |
+| GET /api/users | ✅ (UserAdminDTO) | ✅ (UserSummaryDTO) | ❌ |
 | GET /api/users/me | ✅ | ✅ | ✅ |
 | PUT /api/users/me/password | ✅ | ✅ | ✅ |
 | PUT /api/users/{id}/role | ✅ | ❌ | ❌ |
