@@ -29,9 +29,12 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + username));
 
         // Build and return Spring Security UserDetails
+        // Wiring isActive → disabled flag ensures deactivated users
+        // are rejected by AuthenticationManager with DisabledException
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getEmail())
                 .password(user.getPassword())
+                .disabled(!user.getIsActive())
                 .authorities(getAuthorities(user))
                 .build();
     }

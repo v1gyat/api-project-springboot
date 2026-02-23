@@ -5,41 +5,45 @@ import com.example.apiproject.entity.Role;
 import com.example.apiproject.entity.User;
 import com.example.apiproject.exception.ResourceNotFoundException;
 import com.example.apiproject.exception.UnauthorizedException;
+import com.example.apiproject.mapper.UserMapper;
 import com.example.apiproject.repository.UserRepository;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.example.apiproject.util.SecurityUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserMapper userMapper;
+    private final SecurityUtils securityUtils;
 
-    public UserServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserServiceImpl(UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            UserMapper userMapper,
+            SecurityUtils securityUtils) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.userMapper = userMapper;
+        this.securityUtils = securityUtils;
     }
 
     @Override
-    public List<?> getAllUsers() {
-        User currentUser = getCurrentUser();
+    public Page<?> getAllUsers(Role role, Boolean isActive, Pageable pageable) {
+        User currentUser = securityUtils.getCurrentUser();
 
         if (currentUser.getRole() == Role.MANAGER) {
-            List<User> activeUsers = userRepository.findAllByRoleAndIsActiveTrue(Role.USER);
-            return activeUsers.stream()
-                    .map(this::convertToSummaryDTO)
-                    .collect(Collectors.toList());
+            // MANAGER: only sees active users with USER role (filters ignored)
+            Page<User> users = userRepository.findByRoleAndIsActiveTrue(Role.USER, pageable);
+            return users.map(userMapper::toSummaryDTO);
         } else {
-            List<User> allUsers = userRepository.findAll();
-            return allUsers.stream()
-                    .map(this::convertToAdminDTO)
-                    .collect(Collectors.toList());
+            // ADMIN: sees all users with optional filters
+            Page<User> users = userRepository.findByFilters(role, isActive, pageable);
+            return users.map(userMapper::toAdminDTO);
         }
     }
 
@@ -51,7 +55,7 @@ public class UserServiceImpl implements UserService {
         user.setRole(newRole);
         User updatedUser = userRepository.save(user);
 
-        return convertToAdminDTO(updatedUser);
+        return userMapper.toAdminDTO(updatedUser);
     }
 
     @Override
@@ -59,7 +63,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
 
-        return convertToProfileDTO(user);
+        return userMapper.toProfileDTO(user);
     }
 
     @Override
@@ -88,54 +92,6 @@ public class UserServiceImpl implements UserService {
         user.setIsActive(isActive);
         User updatedUser = userRepository.save(user);
 
-        return convertToAdminDTO(updatedUser);
+        return userMapper.toAdminDTO(updatedUser);
     }
-
-    /**
-     * Get current authenticated user
-     */
-    private User getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new UnauthorizedException("User not authenticated");
-        }
-
-        String currentUserEmail = authentication.getName();
-        return userRepository.findByEmail(currentUserEmail)
-                .orElseThrow(() -> new RuntimeException("Current user not found"));
-    }
-
-    /**
-     * Helper method to convert User entity to UserAdminDTO
-     */
-    private UserAdminDTO convertToAdminDTO(User user) {
-        return new UserAdminDTO(
-                user.getId(),
-                user.getName(),
-                user.getEmail(),
-                user.getRole(),
-                user.getIsActive(),
-                user.getCreatedAt());
-    }
-
-    /**
-     * Helper method to convert User entity to UserSummaryDTO (for MANAGER)
-     */
-    private UserSummaryDTO convertToSummaryDTO(User user) {
-        return new UserSummaryDTO(
-                user.getId(),
-                user.getName(),
-                user.getEmail());
-    }
-
-    /**
-     * Helper method to convert User entity to UserProfileDTO
-     */
-    private UserProfileDTO convertToProfileDTO(User user) {
-        return new UserProfileDTO(
-                user.getId(),
-                user.getName(),
-                user.getEmail());
-    }
-
 }

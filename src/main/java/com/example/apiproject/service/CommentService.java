@@ -2,42 +2,27 @@ package com.example.apiproject.service;
 
 import com.example.apiproject.dto.CommentRequestDTO;
 import com.example.apiproject.dto.CommentResponseDTO;
-
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface CommentService {
 
     /**
      * Create a comment for a specific task
-     * 
-     * @param taskId  The ID of the task to comment on
-     * @param request The comment request containing the message
-     * @return The created comment as a response DTO
-     * @throws com.example.apiproject.exception.ResourceNotFoundException if task
-     *                                                                    not
-     *                                                                    found
      */
     CommentResponseDTO createComment(Long taskId, CommentRequestDTO request);
 
     /**
-     * Get all comments for a specific task
-     * 
-     * @param taskId The ID of the task
-     * @return List of comments for the task
+     * Get all comments for a specific task with pagination
+     *
+     * @param taskId   The ID of the task
+     * @param pageable Pagination and sorting parameters
+     * @return Paged list of comments
      */
-    List<CommentResponseDTO> getCommentsByTaskId(Long taskId);
+    Page<CommentResponseDTO> getCommentsByTaskId(Long taskId, Pageable pageable);
 
     /**
-     * Delete a comment
-     * Only the comment author or admin can delete
-     * 
-     * @param taskId    The task ID (for validation)
-     * @param commentId The comment ID to delete
-     * @throws RuntimeException                                           if user is
-     *                                                                    not author
-     *                                                                    or admin
-     * @throws com.example.apiproject.exception.ResourceNotFoundException if comment
-     *                                                                    not found
+     * Delete a comment (only author or admin)
      */
     void deleteComment(Long taskId, Long commentId);
 }

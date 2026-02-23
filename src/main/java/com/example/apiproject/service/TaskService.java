@@ -4,67 +4,45 @@ import com.example.apiproject.dto.TaskRequestDTO;
 import com.example.apiproject.dto.TaskResponseDTO;
 import com.example.apiproject.dto.TaskUpdateDTO;
 import com.example.apiproject.entity.AssignmentType;
-
-import java.util.List;
+import com.example.apiproject.entity.TaskPriority;
+import com.example.apiproject.entity.TaskStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface TaskService {
 
     /**
      * Creates a new task from the provided request DTO
-     * 
-     * @param request The task creation request containing title, description, and
-     *                priority
-     * @return The created task as a response DTO
      */
     TaskResponseDTO createTask(TaskRequestDTO request);
 
     /**
      * Assigns a task to a user using the specified assignment strategy
-     * 
-     * @param taskId         The ID of the task to assign
-     * @param userId         The ID of the user to assign the task to (may be null
-     *                       for non-manual strategies)
-     * @param assignmentType The strategy to use for assignment (MANUAL, RANDOM,
-     *                       LEAST_LOADED)
-     * @return The updated task as a response DTO
-     * @throws com.example.apiproject.exception.ResourceNotFoundException if task or
-     *                                                                    user not
-     *                                                                    found
-     * @throws com.example.apiproject.exception.BadRequestException       if
-     *                                                                    strategy
-     *                                                                    requirements
-     *                                                                    not met
      */
     TaskResponseDTO assignTask(Long taskId, Long userId, AssignmentType assignmentType);
 
     /**
-     * Get a task by ID
-     * 
-     * @param id The ID of the task to retrieve
-     * @return The task as a response DTO
-     * @throws com.example.apiproject.exception.ResourceNotFoundException if task
-     *                                                                    not found
+     * Get a task by ID (with role-based access control)
      */
     TaskResponseDTO getTaskById(Long id);
 
     /**
-     * Update a task's details
-     * 
-     * @param id        The ID of the task to update
-     * @param updateDTO The update request containing title, description, status, or
-     *                  priority
-     * @return The updated task as a response DTO
-     * @throws com.example.apiproject.exception.ResourceNotFoundException if task
-     *                                                                    not found
+     * Update a task's details (with role-based field restrictions)
      */
     TaskResponseDTO updateTask(Long id, TaskUpdateDTO updateDTO);
 
     /**
-     * Get all tasks with role-based filtering
-     * - ADMIN users see all tasks
-     * - USER/MANAGER users see only tasks assigned to them
-     * 
-     * @return List of tasks based on user's role
+     * Get all tasks with pagination, sorting, and optional filters.
+     * Role-based filtering is applied automatically:
+     * - ADMIN/MANAGER: see all tasks (with optional filters)
+     * - USER: see only tasks assigned to them (with optional filters)
+     *
+     * @param status           Optional filter by task status
+     * @param priority         Optional filter by task priority
+     * @param assignedToUserId Optional filter by assigned user ID
+     * @param pageable         Pagination and sorting parameters
+     * @return Paged list of tasks
      */
-    List<TaskResponseDTO> getAllTasks();
+    Page<TaskResponseDTO> getAllTasks(TaskStatus status, TaskPriority priority,
+            Long assignedToUserId, Pageable pageable);
 }

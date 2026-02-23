@@ -5,22 +5,22 @@ import com.example.apiproject.dto.TaskResponseDTO;
 import com.example.apiproject.dto.TaskUpdateDTO;
 import com.example.apiproject.entity.Role;
 import com.example.apiproject.entity.Task;
+import com.example.apiproject.entity.TaskPriority;
 import com.example.apiproject.entity.TaskStatus;
 import com.example.apiproject.entity.User;
 import com.example.apiproject.exception.BadRequestException;
 import com.example.apiproject.exception.ForbiddenException;
 import com.example.apiproject.exception.ResourceNotFoundException;
-import com.example.apiproject.exception.UnauthorizedException;
+import com.example.apiproject.mapper.TaskMapper;
 import com.example.apiproject.repository.TaskRepository;
 import com.example.apiproject.repository.UserRepository;
 import com.example.apiproject.entity.AssignmentType;
 import com.example.apiproject.service.strategy.TaskAssignmentStrategyFactory;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.example.apiproject.util.SecurityUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 public class TaskServiceImpl implements TaskService {
@@ -28,15 +28,21 @@ public class TaskServiceImpl implements TaskService {
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
     private final TaskAssignmentStrategyFactory strategyFactory;
+    private final TaskMapper taskMapper;
+    private final SecurityUtils securityUtils;
 
     // Constructor Injection - Best Practice for Dependency Injection
     // Depends on factory to get the right strategy dynamically
     public TaskServiceImpl(TaskRepository taskRepository,
             UserRepository userRepository,
-            TaskAssignmentStrategyFactory strategyFactory) {
+            TaskAssignmentStrategyFactory strategyFactory,
+            TaskMapper taskMapper,
+            SecurityUtils securityUtils) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
         this.strategyFactory = strategyFactory;
+        this.taskMapper = taskMapper;
+        this.securityUtils = securityUtils;
     }
 
     @Override
@@ -52,7 +58,7 @@ public class TaskServiceImpl implements TaskService {
         task.setStatus(TaskStatus.OPEN);
 
         // Step 3: Get the currently logged-in user(manager)
-        User creator = getCurrentUser();
+        User creator = securityUtils.getCurrentUser();
         task.setCreatedBy(creator);
 
         // Step 4: If assignedToUserId is provided, find and assign the user
@@ -70,8 +76,8 @@ public class TaskServiceImpl implements TaskService {
         // Step 5: Save the entity using repository
         Task savedTask = taskRepository.save(task);
 
-        // Step 6: Convert to DTO using helper method
-        return mapToDTO(savedTask);
+        // Step 6: Convert to DTO using mapper
+        return taskMapper.toResponseDTO(savedTask);
     }
 
     @Override
@@ -94,7 +100,7 @@ public class TaskServiceImpl implements TaskService {
         Task updatedTask = taskRepository.save(task);
 
         // Step 5: Convert to DTO and return
-        return mapToDTO(updatedTask);
+        return taskMapper.toResponseDTO(updatedTask);
     }
 
     @Override
@@ -104,7 +110,7 @@ public class TaskServiceImpl implements TaskService {
                 .orElseThrow(() -> new ResourceNotFoundException("Task", "id", id));
 
         // Step 2: Get current user
-        User currentUser = getCurrentUser();
+        User currentUser = securityUtils.getCurrentUser();
 
         // Step 3: Authorization check based on role
         Role role = currentUser.getRole();
@@ -122,7 +128,7 @@ public class TaskServiceImpl implements TaskService {
             }
         }
 
-        return mapToDTO(task);
+        return taskMapper.toResponseDTO(task);
     }
 
     @Override
@@ -133,7 +139,7 @@ public class TaskServiceImpl implements TaskService {
                 .orElseThrow(() -> new ResourceNotFoundException("Task", "id", id));
 
         // Step 2: Get current user and check role
-        User currentUser = getCurrentUser();
+        User currentUser = securityUtils.getCurrentUser();
         Role role = currentUser.getRole();
 
         // Step 3: Role-based update logic
@@ -181,79 +187,28 @@ public class TaskServiceImpl implements TaskService {
         Task updatedTask = taskRepository.save(task);
 
         // Step 5: Convert to DTO and return
-        return mapToDTO(updatedTask);
+        return taskMapper.toResponseDTO(updatedTask);
     }
 
     @Override
-    public List<TaskResponseDTO> getAllTasks() {
+    public Page<TaskResponseDTO> getAllTasks(TaskStatus status, TaskPriority priority,
+            Long assignedToUserId, Pageable pageable) {
         // Get current user
-        User currentUser = getCurrentUser();
-
-        // Check the user's role
-        List<Task> tasks;
+        User currentUser = securityUtils.getCurrentUser();
         Role role = currentUser.getRole();
 
+        Page<Task> tasks;
+
         if (role == Role.ADMIN || role == Role.MANAGER) {
-            // ADMIN and MANAGER sees ALL tasks
-            tasks = taskRepository.findAll();
-        } else if (role == Role.USER) {
-            // USER sees only tasks assigned to them
-            tasks = taskRepository.findByAssignedTo(currentUser);
+            // ADMIN and MANAGER see all tasks (with optional filters)
+            tasks = taskRepository.findByFilters(status, priority, assignedToUserId, pageable);
         } else {
-            tasks = new java.util.ArrayList<>();
+            // USER sees only tasks assigned to them (with optional filters)
+            tasks = taskRepository.findByAssignedToAndFilters(
+                    currentUser, status, priority, pageable);
         }
 
-        // Convert to DTOs and return
-        return tasks.stream()
-                .map(this::mapToDTO)
-                .collect(java.util.stream.Collectors.toList());
-    }
-
-    /**
-     * Get current authenticated user
-     */
-    private User getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new UnauthorizedException("User not authenticated");
-        }
-
-        String currentUserEmail = authentication.getName();
-        return userRepository.findByEmail(currentUserEmail)
-                .orElseThrow(() -> new RuntimeException("Current user not found"));
-    }
-
-    /**
-     * Helper method to convert Task entity to TaskResponseDTO
-     * Reduces code duplication and follows DRY principle
-     */
-    private TaskResponseDTO mapToDTO(Task task) {
-        TaskResponseDTO response = new TaskResponseDTO();
-        response.setId(task.getId());
-        response.setTitle(task.getTitle());
-        response.setDescription(task.getDescription());
-        response.setStatus(task.getStatus());
-        response.setPriority(task.getPriority());
-        response.setCreatedAt(task.getCreatedAt());
-
-        // Map assigned user details if task is assigned
-        if (task.getAssignedTo() != null) {
-            response.setAssignedUserId(task.getAssignedTo().getId());
-            response.setAssignedUserName(task.getAssignedTo().getName());
-        }
-
-        // Map creator details if task has a creator
-        if (task.getCreatedBy() != null) {
-            response.setCreatedByUserId(task.getCreatedBy().getId());
-            response.setCreatedByUserName(task.getCreatedBy().getName());
-        }
-
-        // Map updatedBy details if task has been updated by someone
-        if (task.getUpdatedBy() != null) {
-            response.setUpdatedByUserId(task.getUpdatedBy().getId());
-            response.setUpdatedByUserName(task.getUpdatedBy().getName());
-        }
-
-        return response;
+        // Convert Page<Task> to Page<TaskResponseDTO> using .map()
+        return tasks.map(taskMapper::toResponseDTO);
     }
 }

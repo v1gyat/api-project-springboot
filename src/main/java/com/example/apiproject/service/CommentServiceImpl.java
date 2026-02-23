@@ -9,31 +9,31 @@ import com.example.apiproject.entity.User;
 import com.example.apiproject.exception.BadRequestException;
 import com.example.apiproject.exception.ForbiddenException;
 import com.example.apiproject.exception.ResourceNotFoundException;
-import com.example.apiproject.exception.UnauthorizedException;
+import com.example.apiproject.mapper.CommentMapper;
 import com.example.apiproject.repository.CommentRepository;
 import com.example.apiproject.repository.TaskRepository;
-import com.example.apiproject.repository.UserRepository;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.example.apiproject.util.SecurityUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class CommentServiceImpl implements CommentService {
 
     private final CommentRepository commentRepository;
     private final TaskRepository taskRepository;
-    private final UserRepository userRepository;
+    private final CommentMapper commentMapper;
+    private final SecurityUtils securityUtils;
 
     public CommentServiceImpl(CommentRepository commentRepository,
             TaskRepository taskRepository,
-            UserRepository userRepository) {
+            CommentMapper commentMapper,
+            SecurityUtils securityUtils) {
         this.commentRepository = commentRepository;
         this.taskRepository = taskRepository;
-        this.userRepository = userRepository;
+        this.commentMapper = commentMapper;
+        this.securityUtils = securityUtils;
     }
 
     @Override
@@ -44,7 +44,7 @@ public class CommentServiceImpl implements CommentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Task", "id", taskId));
 
         // Step 2: Get current user
-        User currentUser = getCurrentUser();
+        User currentUser = securityUtils.getCurrentUser();
 
         // Step 3: AUTHORIZATION - Verify user can see the task
         verifyTaskAccess(task, currentUser);
@@ -59,28 +59,26 @@ public class CommentServiceImpl implements CommentService {
         Comment savedComment = commentRepository.save(comment);
 
         // Step 6: Convert to DTO and return
-        return mapToDTO(savedComment);
+        return commentMapper.toResponseDTO(savedComment);
     }
 
     @Override
-    public List<CommentResponseDTO> getCommentsByTaskId(Long taskId) {
+    public Page<CommentResponseDTO> getCommentsByTaskId(Long taskId, Pageable pageable) {
         // Step 1: Verify task exists
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task", "id", taskId));
 
         // Step 2: Get current user
-        User currentUser = getCurrentUser();
+        User currentUser = securityUtils.getCurrentUser();
 
         // Step 3: AUTHORIZATION - Verify user can see the task
         verifyTaskAccess(task, currentUser);
 
-        // Step 4: Get all comments for the task
-        List<Comment> comments = commentRepository.findByTaskId(taskId);
+        // Step 4: Get paged comments for the task
+        Page<Comment> comments = commentRepository.findByTaskId(taskId, pageable);
 
-        // Step 5: Convert to DTOs and return
-        return comments.stream()
-                .map(this::mapToDTO)
-                .collect(Collectors.toList());
+        // Step 5: Convert Page<Comment> to Page<CommentResponseDTO> using .map()
+        return comments.map(commentMapper::toResponseDTO);
     }
 
     @Override
@@ -96,7 +94,7 @@ public class CommentServiceImpl implements CommentService {
         }
 
         // Step 3: Get current user
-        User currentUser = getCurrentUser();
+        User currentUser = securityUtils.getCurrentUser();
 
         // Step 4: AUTHORIZATION - Only author or admin can delete
         Role role = currentUser.getRole();
@@ -109,20 +107,6 @@ public class CommentServiceImpl implements CommentService {
 
         // Step 5: Delete the comment
         commentRepository.delete(comment);
-    }
-
-    /**
-     * Get current authenticated user
-     */
-    private User getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new UnauthorizedException("User not authenticated");
-        }
-
-        String currentUserEmail = authentication.getName();
-        return userRepository.findByEmail(currentUserEmail)
-                .orElseThrow(() -> new RuntimeException("Current user not found"));
     }
 
     /**
@@ -140,18 +124,5 @@ public class CommentServiceImpl implements CommentService {
         if (!isAdmin && !isCreator && !isAssignee) {
             throw new ForbiddenException("Access denied: You don't have permission to access this task");
         }
-    }
-
-    /**
-     * Helper method to convert Comment entity to CommentResponseDTO
-     */
-    private CommentResponseDTO mapToDTO(Comment comment) {
-        CommentResponseDTO response = new CommentResponseDTO();
-        response.setId(comment.getId());
-        response.setMessage(comment.getMessage());
-        response.setCommentedById(comment.getCommentedBy().getId());
-        response.setCommentedBy(comment.getCommentedBy().getName());
-        response.setCreatedAt(comment.getCreatedAt());
-        return response;
     }
 }

@@ -102,6 +102,26 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handler for DisabledException (Spring Security)
+     * Thrown when a deactivated user (isActive=false) attempts to login
+     * Returns HTTP 403 Forbidden with clear messaging
+     */
+    @ExceptionHandler(org.springframework.security.authentication.DisabledException.class)
+    public ResponseEntity<ApiResponse<?>> handleDisabledException(
+            org.springframework.security.authentication.DisabledException ex) {
+        log.warn("Login attempt by deactivated account: {}", ex.getMessage());
+
+        ApiResponse<?> response = new ApiResponse<>(
+                false,
+                "Account is deactivated. Please contact an administrator.",
+                null,
+                null,
+                LocalDateTime.now());
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
+    /**
      * Handler for ForbiddenException (custom)
      * Returns HTTP 403 Forbidden
      */

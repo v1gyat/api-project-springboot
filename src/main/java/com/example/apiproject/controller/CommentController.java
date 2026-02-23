@@ -3,14 +3,17 @@ package com.example.apiproject.controller;
 import com.example.apiproject.dto.CommentRequestDTO;
 import com.example.apiproject.dto.CommentResponseDTO;
 import com.example.apiproject.response.ApiResponse;
+import com.example.apiproject.response.PagedResponse;
 import com.example.apiproject.service.CommentService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/tasks/{taskId}/comments")
@@ -25,10 +28,6 @@ public class CommentController {
     /**
      * Create a new comment for a specific task
      * Only MANAGER and USER roles can create comments (Admin cannot)
-     * 
-     * @param taskId  The ID of the task to comment on
-     * @param request The comment request containing the message
-     * @return ApiResponse containing the created comment
      */
     @PostMapping
     @PreAuthorize("hasRole('MANAGER') or hasRole('USER')")
@@ -46,20 +45,25 @@ public class CommentController {
     }
 
     /**
-     * Get all comments for a specific task
-     * 
-     * @param taskId The ID of the task
-     * @return ApiResponse containing list of comments
+     * Get all comments for a specific task (with pagination and sorting)
+     * GET /api/tasks/{taskId}/comments?page=0&size=10&sortBy=createdAt
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<List<CommentResponseDTO>>> getCommentsForTask(
-            @PathVariable Long taskId) {
+    public ResponseEntity<ApiResponse<PagedResponse<CommentResponseDTO>>> getCommentsForTask(
+            @PathVariable Long taskId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy) {
 
-        List<CommentResponseDTO> comments = commentService.getCommentsByTaskId(taskId);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy));
+        Page<CommentResponseDTO> comments = commentService.getCommentsByTaskId(taskId, pageable);
 
-        ApiResponse<List<CommentResponseDTO>> response = ApiResponse.success(
+        ApiResponse<PagedResponse<CommentResponseDTO>> response = new ApiResponse<>(
+                true,
                 "Comments retrieved successfully",
-                comments);
+                PagedResponse.from(comments),
+                null,
+                java.time.LocalDateTime.now());
 
         return ResponseEntity.ok(response);
     }
@@ -67,10 +71,6 @@ public class CommentController {
     /**
      * Delete a comment
      * Only the comment author or admin can delete
-     * 
-     * @param taskId    The task ID
-     * @param commentId The comment ID to delete
-     * @return Success message
      */
     @DeleteMapping("/{commentId}")
     public ResponseEntity<ApiResponse<String>> deleteComment(

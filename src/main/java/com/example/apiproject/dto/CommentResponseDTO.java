@@ -10,6 +10,6 @@ public class CommentResponseDTO {
     private Long id;
     private String message;
     private Long commentedById; // User ID for authorization checks
-    private String commentedBy; // Username/email of the user who commented
+    private String commentedByName; // Name of the user who commented
     private LocalDateTime createdAt;
 }
