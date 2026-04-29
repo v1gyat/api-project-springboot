@@ -17,9 +17,13 @@ import com.example.apiproject.repository.UserRepository;
 import com.example.apiproject.entity.AssignmentType;
 import com.example.apiproject.service.strategy.TaskAssignmentStrategyFactory;
 import com.example.apiproject.util.SecurityUtils;
+import com.specification.TaskSpecifications;
+
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -104,6 +108,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
+    @Cacheable(value = "tasks", key = "#id")
     public TaskResponseDTO getTaskById(Long id) {
         // Step 1: Find task by ID, throw exception if not found
         Task task = taskRepository.findById(id)
@@ -193,22 +198,30 @@ public class TaskServiceImpl implements TaskService {
     @Override
     public Page<TaskResponseDTO> getAllTasks(TaskStatus status, TaskPriority priority,
             Long assignedToUserId, Pageable pageable) {
-        // Get current user
         User currentUser = securityUtils.getCurrentUser();
         Role role = currentUser.getRole();
 
-        Page<Task> tasks;
+        // 1. Start with a base specification
+        Specification<Task> spec = Specification.where(null);
 
+        // 2. Add Global Filters (Status and Priority apply to everyone)
+        spec = spec.and(TaskSpecifications.hasStatus(status))
+                .and(TaskSpecifications.hasPriority(priority));
+
+        // 3. Apply Role-Based Logic
         if (role == Role.ADMIN || role == Role.MANAGER) {
-            // ADMIN and MANAGER see all tasks (with optional filters)
-            tasks = taskRepository.findByFilters(status, priority, assignedToUserId, pageable);
+            // Admins/Managers can filter by ANY user ID provided in the request
+            spec = spec.and(TaskSpecifications.isAssignedTo(assignedToUserId));
         } else {
-            // USER sees only tasks assigned to them (with optional filters)
-            tasks = taskRepository.findByAssignedToAndFilters(
-                    currentUser, status, priority, pageable);
+            // REGULAR USERS: Force the filter to THEIR own ID only.
+            // They cannot see other people's tasks even if they send a different
+            // assignedToUserId
+            spec = spec.and(TaskSpecifications.isAssignedTo(currentUser.getId()));
         }
 
-        // Convert Page<Task> to Page<TaskResponseDTO> using .map()
+        // 4. Single Repository Call
+        Page<Task> tasks = taskRepository.findAll(spec, pageable);
+
         return tasks.map(taskMapper::toResponseDTO);
     }
 }

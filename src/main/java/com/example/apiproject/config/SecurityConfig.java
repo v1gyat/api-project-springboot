@@ -37,8 +37,8 @@ public class SecurityConfig {
 
                 // Configure authorization rules
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints - only login is public
-                        .requestMatchers("/api/auth/login").permitAll()
+                        // Public endpoints - login, refresh, logout are public
+                        .requestMatchers("/api/auth/login", "/api/auth/refresh", "/api/auth/logout").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 
                         // All other endpoints require authentication

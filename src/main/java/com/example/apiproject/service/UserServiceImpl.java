@@ -8,8 +8,10 @@ import com.example.apiproject.exception.UnauthorizedException;
 import com.example.apiproject.mapper.UserMapper;
 import com.example.apiproject.repository.UserRepository;
 import com.example.apiproject.util.SecurityUtils;
+import com.specification.UserSpecifications;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,13 +38,20 @@ public class UserServiceImpl implements UserService {
     public Page<?> getAllUsers(Role role, Boolean isActive, Pageable pageable) {
         User currentUser = securityUtils.getCurrentUser();
 
+        // 1. Start with a base specification
+        Specification<User> spec = Specification.where(null);
+
         if (currentUser.getRole() == Role.MANAGER) {
-            // MANAGER: only sees active users with USER role (filters ignored)
-            Page<User> users = userRepository.findByRoleAndIsActiveTrue(Role.USER, pageable);
+            // MANAGER: always locked to active USER-role accounts, request params ignored
+            spec = spec.and(UserSpecifications.hasRole(Role.USER))
+                       .and(UserSpecifications.isActive(true));
+            Page<User> users = userRepository.findAll(spec, pageable);
             return users.map(userMapper::toSummaryDTO);
         } else {
-            // ADMIN: sees all users with optional filters
-            Page<User> users = userRepository.findByFilters(role, isActive, pageable);
+            // ADMIN: sees all users with optional role and isActive filters
+            spec = spec.and(UserSpecifications.hasRole(role))
+                       .and(UserSpecifications.isActive(isActive));
+            Page<User> users = userRepository.findAll(spec, pageable);
             return users.map(userMapper::toAdminDTO);
         }
     }

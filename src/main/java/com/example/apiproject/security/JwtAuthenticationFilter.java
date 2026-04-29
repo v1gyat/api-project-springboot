@@ -28,7 +28,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
-        System.out.println("1. [Filter] Request received for: " + request.getServletPath()); // TRACER
         // 1. Extract Authorization header
         String authorizationHeader = request.getHeader("Authorization");
 
@@ -39,7 +38,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             // 3. Extract token (remove "Bearer " prefix)
             jwt = authorizationHeader.substring(7);
-            System.out.println("2. [Filter] Token found: " + jwt.substring(0, 10) + "..."); // TRACER
 
             // 4. Extract username from token
             try {
@@ -58,7 +56,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // 7. Validate token
             if (jwtUtils.validateToken(jwt, userDetails)) {
-                System.out.println("3. [Filter] Token Valid. Setting SecurityContext for: " + username); // TRACER
                 // 8. Create authentication token
                 UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
@@ -75,6 +72,5 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // 10. Continue the filter chain
         filterChain.doFilter(request, response);
-        System.out.println("4. [Filter] Response sent back."); // TRACER
     }
 }
